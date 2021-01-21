@@ -4,7 +4,7 @@ This extension allows backend users to search for images through [Shutterstock](
 It adds a new "Add media from Shutterstock" button in Media fields. Images can then be searched using keywords and various filters.
 
 ### Installation
-```composer require ideative/shutterstock-connector```
+```composer require ideativedigital/shutterstock-connector```
 
 or download it from the [TYPO3 Extension Repository](https://extensions.typo3.org/) and activate the extension in the Extension Manager of your TYPO3 installation.
 
