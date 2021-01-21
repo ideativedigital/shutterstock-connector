@@ -1,0 +1,8 @@
+# cat=Backend; type=string; label=Shutterstock Consumer key
+shutterstock_consumer_key = 
+
+# cat=Backend; type=string; label=Shutterstock Consumer key
+shutterstock_consumer_secret = 
+
+# cat=Backend; type=string; label=Shutterstock token: Generated from https://www.shutterstock.com/account/developers/apps
+shutterstock_token = 

@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<xliff version="1.0">
+    <file source-language="en" datatype="plaintext" original="messages" date="2013-09-19T09:11:39Z"
+          product-name="intranet_package">
+        <header/>
+        <body>
+            <trans-unit id="button.add_media">
+                <source>Add media from Shutterstock</source>
+            </trans-unit>
+            <trans-unit id="placeholder.search">
+                <source>Search...</source>
+            </trans-unit>
+            <trans-unit id="button.submit">
+                <source>Add selected media</source>
+            </trans-unit>
+            <trans-unit id="button.cancel">
+                <source>Cancel</source>
+            </trans-unit>
+
+            <trans-unit id="filter.orientation.label">
+                <source>Orientation</source>
+            </trans-unit>
+            <trans-unit id="filter.orientation.I.any">
+                <source>Any</source>
+            </trans-unit>
+            <trans-unit id="filter.orientation.I.horizontal">
+                <source>Landscape</source>
+            </trans-unit>
+            <trans-unit id="filter.orientation.I.vertical">
+                <source>Portrait</source>
+            </trans-unit>
+
+
+            <trans-unit id="filter.image_type.label">
+                <source>Image type</source>
+            </trans-unit>
+            <trans-unit id="filter.image_type.I.any">
+                <source>Any</source>
+            </trans-unit>
+            <trans-unit id="filter.image_type.I.photo">
+                <source>Photo</source>
+            </trans-unit>
+            <trans-unit id="filter.image_type.I.vector">
+                <source>Vector</source>
+            </trans-unit>
+            <trans-unit id="filter.image_type.I.illustration">
+                <source>Illustration</source>
+            </trans-unit>
+
+            <trans-unit id="filter.color.label">
+                <source>Dominant color</source>
+            </trans-unit>
+            <trans-unit id="filter.color.I.any">
+                <source>Any</source>
+            </trans-unit>
+            <trans-unit id="filter.color.I.grayscale">
+                <source>Grayscale</source>
+            </trans-unit>
+            <trans-unit id="filter.color.I.blue">
+                <source>Blue</source>
+            </trans-unit>
+            <trans-unit id="filter.color.I.fuschia">
+                <source>Fuschia</source>
+            </trans-unit>
+            <trans-unit id="filter.color.I.green">
+                <source>Green</source>
+            </trans-unit>
+            <trans-unit id="filter.color.I.orange">
+                <source>Orange</source>
+            </trans-unit>
+            <trans-unit id="filter.color.I.purple">
+                <source>Purple</source>
+            </trans-unit>
+            <trans-unit id="filter.color.I.red">
+                <source>Red</source>
+            </trans-unit>
+            <trans-unit id="filter.color.I.teal">
+                <source>Teal</source>
+            </trans-unit>
+            <trans-unit id="filter.color.I.yellow">
+                <source>Yellow</source>
+            </trans-unit>
+
+            <trans-unit id="filter.category.label">
+                <source>Category</source>
+            </trans-unit>
+            <trans-unit id="filter.category.I.any">
+                <source>Any</source>
+            </trans-unit>
+
+            <trans-unit id="filter.people_ethnicity.label">
+                <source>People ethnicity</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.any">
+                <source>Any</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.african">
+                <source>African</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.african_american">
+                <source>African american</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.brazilian">
+                <source>Brazilian</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.caucasian">
+                <source>Caucasian</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.chinese">
+                <source>Chinese</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.east_asian">
+                <source>East-asian</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.hispanic">
+                <source>Hispanic</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.japanese">
+                <source>Japanese</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.native_american">
+                <source>Native american</source>
+            </trans-unit>
+            
+            <trans-unit id="filter.people_ethnicity.I.pacific_islander">
+                <source>Pacific islander</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.south_asian">
+                <source>South-asian</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.southeast_asian">
+                <source>South-east asian</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.middle_eastern">
+                <source>Middle-eastern</source>
+            </trans-unit>
+            <trans-unit id="filter.people_ethnicity.I.other">
+                <source>Other</source>
+            </trans-unit>
+            
+            <trans-unit id="filter.people_gender.label">
+                <source>People gender</source>
+            </trans-unit>
+            <trans-unit id="filter.people_gender.I.any">
+                <source>Any</source>
+            </trans-unit>
+            <trans-unit id="filter.people_gender.I.male">
+                <source>Male</source>
+            </trans-unit>
+            <trans-unit id="filter.people_gender.I.female">
+                <source>Female</source>
+            </trans-unit>
+
+
+            <trans-unit id="filter.people_age.label">
+                <source>People age</source>
+            </trans-unit>
+            <trans-unit id="filter.people_age.I.any">
+                <source>Any</source>
+            </trans-unit>
+            <trans-unit id="filter.people_age.I.infants">
+                <source>Infants</source>
+            </trans-unit>
+            <trans-unit id="filter.people_age.I.children">
+                <source>Children</source>
+            </trans-unit>
+            <trans-unit id="filter.people_age.I.teenagers">
+                <source>Teenagers</source>
+            </trans-unit>
+            <trans-unit id="filter.people_age.I.20s">
+                <source>20s</source>
+            </trans-unit>
+            <trans-unit id="filter.people_age.I.30s">
+                <source>30s</source>
+            </trans-unit>
+            <trans-unit id="filter.people_age.I.40s">
+                <source>40s</source>
+            </trans-unit>
+            <trans-unit id="filter.people_age.I.50s">
+                <source>50s</source>
+            </trans-unit>
+            <trans-unit id="filter.people_age.I.60s">
+                <source>60s</source>
+            </trans-unit>
+            <trans-unit id="filter.people_age.I.older">
+                <source>Older</source>
+            </trans-unit>
+        </body>
+    </file>
+</xliff>
