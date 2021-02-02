@@ -1,6 +1,6 @@
 {
 	"name": "ideative/shutterstock-connector",
-	"version": "10.0.1",
+	"version": "10.0.2",
 	"type": "typo3-cms-extension",
 	"description": "Plugin for extension id_stock_pictures that connects the Shutterstock API to the TYPO3 backend",
 	"autoload": {

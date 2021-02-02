@@ -30,7 +30,13 @@
                 <source>Portrait</source>
             </trans-unit>
 
-
+            <trans-unit id="filter.collection.label">
+                <source>Your collections</source>
+            </trans-unit>
+            <trans-unit id="filter.collection.I.any">
+                <source>Any</source>
+            </trans-unit>
+            
             <trans-unit id="filter.image_type.label">
                 <source>Image type</source>
             </trans-unit>
