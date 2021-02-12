@@ -616,7 +616,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
     {
         return '<span class="t3js-icon icon icon-size-small icon-state-default icon-actions-online-media-add" data-identifier="actions-shutterstock-media-add">
                 <span class="icon-markup">
-                    <svg class="icon-color" role="img"><use xlink:href="/typo3/sysext/core/Resources/Public/Icons/T3Icons/sprites/actions.svg#actions-cloud" /></svg>
+                    <img src="/typo3conf/ext/id_shutterstock_connector/Resources/Public/Icons/actions-online-media-add.svg" width="16" height="16" />
                 </span>
             </span>';
     }
