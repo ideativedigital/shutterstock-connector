@@ -82,6 +82,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
         $subscriptionId = $this->getSubscription();
         $url = null;
         $extension = null;
+        $result = null;
         if ($subscriptionId) {
             try {
                 $body = [
@@ -111,9 +112,17 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
                 $this->logger->critical($e->getMessage());
             }
         }
+        $errors = [];
+        if ($result->errors) {
+            foreach ($result->errors as $error) {
+                $errors[] = $error->message;
+            }
+        }
+
         return [
             'url' => $url,
-            'extension' => $extension
+            'extension' => $extension,
+            'errors' => $errors
         ];
     }
 
@@ -147,7 +156,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
      * @return array|mixed
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function search(array $params)
+    public function search(array $params): SearchResult
     {
         /** @var SearchResult $result */
         $result = GeneralUtility::makeInstance(SearchResult::class);
@@ -265,7 +274,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
      * Returns the label of the "Add media" button
      * @return string|null
      */
-    public function getAddButtonLabel()
+    public function getAddButtonLabel(): ?string
     {
         return LocalizationUtility::translate('button.add_media', 'id_shutterstock_connector');
     }
