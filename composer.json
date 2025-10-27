@@ -1,8 +1,8 @@
 {
 	"name": "ideative/shutterstock-connector",
-	"version": "11.0.0",
+	"version": "14.0.0",
 	"type": "typo3-cms-extension",
-	"description": "Plugin for extension id_stock_pictures that connects the Shutterstock API to the TYPO3 backend",
+	"description": "Plugin for extension stock-pictures that connects the Shutterstock API to the TYPO3 backend",
 	"autoload": {
 		"psr-4": {
 			"Ideative\\IdShutterstockConnector\\": "Classes"
@@ -10,19 +10,19 @@
 	},
 	"authors": [
 		{
-			"name": "Julien Henchoz",
+			"name": "Ideative",
 			"email": "typo3@ideative.ch",
 			"role": "Developer",
 			"homepage": "https://www.ideative.ch"
 		}
 	],
 	"require": {
-		"typo3/cms-core": "^11.0",
-		"ideative/stock-pictures": "^11"
+		"typo3/cms-core": "^14.0",
+		"ideative/stock-pictures": "^14"
 	},
 	"extra": {
 		"typo3/cms": {
-			"extension-key": "id_shutterstock_connector"
+			"extension-key": "shutterstock-connector"
 		}
 	},
 	"homepage": "https://github.com/ideativedigital/shutterstock-connector",

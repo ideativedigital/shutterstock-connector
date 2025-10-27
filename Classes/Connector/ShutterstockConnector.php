@@ -2,17 +2,19 @@
 
 namespace Ideative\IdShutterstockConnector\Connector;
 
+use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
+use GuzzleHttp\Exception\GuzzleException;
 use Ideative\IdStockPictures\ConnectorInterface;
 use Ideative\IdStockPictures\Domain\Model\SearchResult;
 use Ideative\IdStockPictures\Domain\Model\SearchResultItem;
+use JsonException;
 use Psr\Log\LoggerAwareInterface;
 use Psr\Log\LoggerAwareTrait;
-use TYPO3\CMS\Backend\Routing\UriBuilder;
+use stdClass;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Log\LogManager;
-use TYPO3\CMS\Core\Resource\Folder;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Extbase\Utility\LocalizationUtility;
 
@@ -23,59 +25,56 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
     /**
      * URL of the Shutterstock Search API
      */
-    const SEARCH_ENDPOINT = 'https://api.shutterstock.com/v2/images/search';
+    public const SEARCH_ENDPOINT = 'https://api.shutterstock.com/v2/images/search';
 
     /**
      * URL of the Shutterstock Subscription API
      * This allows us to retrieve the current subscriptions to know which kind of assets we're allowed to download in HD
      */
-    const SUBSCRIPTION_ENDPOINT = 'https://api.shutterstock.com/v2/user/subscriptions';
+    public const SUBSCRIPTION_ENDPOINT = 'https://api.shutterstock.com/v2/user/subscriptions';
 
     /**
      * URL of the Shutterstock Licencing API
      * This allows us to download HD versions of assets
      */
-    const LICENSING_ENDPOINT = 'https://api.shutterstock.com/v2/images/licenses';
+    public const LICENSING_ENDPOINT = 'https://api.shutterstock.com/v2/images/licenses';
 
     /**
      * URL of the Shutterstock Licencing API
      * This allows us to download HD versions of assets
      */
-    const CATEGORIES_ENDPOINT = 'https://api.shutterstock.com/v2/images/categories';
+    public const CATEGORIES_ENDPOINT = 'https://api.shutterstock.com/v2/images/categories';
 
     /**
      * URL of the Shutterstock Collections API
      * This allows us to list all of the user's collections
      */
-    const COLLECTIONS_ENDPOINT = 'https://api.shutterstock.com/v2/images/collections';
+    public const COLLECTIONS_ENDPOINT = 'https://api.shutterstock.com/v2/images/collections';
 
     /**
      * URL of the Shutterstock Collections content API
      * This allows us to fetch the images contained in a selected collection
      */
-    const COLLECTIONS_CONTENT_ENDPOINT = 'https://api.shutterstock.com/v2/images/collections/{id}/items';
+    public const COLLECTIONS_CONTENT_ENDPOINT = 'https://api.shutterstock.com/v2/images/collections/{id}/items';
 
     /**
      * URL of the Shutterstock Images API
      * This allows us to fetch the details of a series of images, based on their ID
      */
-    const IMAGES_ENDPOINT = 'https://api.shutterstock.com/v2/images';
+    public const IMAGES_ENDPOINT = 'https://api.shutterstock.com/v2/images';
 
-    /**
-     * @var array
-     */
-    protected $extensionConfiguration;
+    protected mixed $extensionConfiguration;
 
     public function __construct()
     {
-        $this->extensionConfiguration = GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('id_shutterstock_connector');
+        $this->extensionConfiguration = GeneralUtility::makeInstance(ExtensionConfiguration::class)->get('shutterstock-connector');
         $this->setLogger(GeneralUtility::makeInstance(LogManager::class)->getLogger(__CLASS__));
     }
 
     /**
      * @param string $id
-     * @return string|null
-     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @return array
+     * @throws GuzzleException
      */
     public function getFileUrlAndExtension(string $id): array
     {
@@ -83,6 +82,8 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
         $url = null;
         $extension = null;
         $result = null;
+        $imageDetails = null;
+
         if ($subscriptionId) {
             try {
                 $body = [
@@ -108,7 +109,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
 
                 $url = !empty($result->data[0]->download->url) ? $result->data[0]->download->url : null;
                 $extension = pathinfo($url)['extension'] ?? '';
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 $this->logger->critical($e->getMessage());
             }
         }
@@ -118,12 +119,67 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
                 $errors[] = $error->message;
             }
         }
+        $imageDetails = $this->getImageDetails($id);
 
         return [
             'url' => $url,
             'extension' => $extension,
+            'metadata' => [
+                'title' => $this->getFileTitle($imageDetails),
+                'description' => $this->getFileDescription($imageDetails),
+                'width' => $imageDetails->assets->huge_jpg->width ?? 0,
+                'height' => $imageDetails->assets->huge_jpg->height ?? 0,
+            ],
             'errors' => $errors
         ];
+    }
+
+    /**
+     * Récupère les détails d'une image depuis l'API Shutterstock
+     * @param string $id
+     * @return mixed|null
+     * @throws GuzzleException
+     */
+    protected function getImageDetails(string $id): mixed
+    {
+        try {
+            $client = new Client();
+            $response = $client->request('GET', self::IMAGES_ENDPOINT . '/' . $id, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $this->extensionConfiguration['shutterstock_token'],
+                ],
+            ]);
+
+            return json_decode($response->getBody()->getContents(), false, 512, JSON_THROW_ON_ERROR);
+        } catch (Exception $e) {
+            $this->logger->error('Failed to fetch image details: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    protected function getFileName(mixed $fileData): string
+    {
+        return $fileData->id ?? '';
+    }
+
+    protected function getFileTitle(mixed $fileData): string
+    {
+        return $fileData->description ?? '';
+    }
+
+    protected function getFileDescription(mixed $fileData): string
+    {
+        if (!$fileData || !isset($fileData->contributor)) {
+            return '';
+        }
+
+        $contributorName = $fileData->contributor->id ?? '';
+
+        if ($contributorName) {
+            return sprintf('Shutterstock #%s', $contributorName);
+        }
+
+        return '';
     }
 
     /**
@@ -139,12 +195,13 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
                     'Authorization' => 'Bearer ' . $this->extensionConfiguration['shutterstock_token'],
                 ]
             ]);
-            $result = json_decode($response->getBody()->getContents());
+
+            $result = json_decode($response->getBody()->getContents(), false, 512, JSON_THROW_ON_ERROR);
             if (!empty($result->data[0])) {
                 // Return the first returned subscription
                 $result = $result->data[0]->id;
             }
-        } catch (\Exception $e) {
+        } catch (Exception|GuzzleException $e) {
             $this->logger->critical($e->getMessage());
             $result = null;
         }
@@ -153,8 +210,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
 
     /**
      * @param array $params
-     * @return array|mixed
-     * @throws \GuzzleHttp\Exception\GuzzleException
+     * @return SearchResult
      */
     public function search(array $params): SearchResult
     {
@@ -167,7 +223,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
         unset($params['q']);
 
         // Remove unset filters
-        $params = array_filter($params, function ($value) {
+        $params = array_filter($params, static function ($value) {
             return !empty($value);
         });
 
@@ -182,28 +238,26 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
                         $this->extensionConfiguration['shutterstock_consumer_secret']
                     ]
                 ]);
-                $rawResult = json_decode($response->getBody()->getContents());
+                $rawResult = json_decode($response->getBody()->getContents(), false, 512, JSON_THROW_ON_ERROR);
                 if ($rawResult) {
                     $result = $this->formatResults($rawResult, $params);
                 }
-            } else {
-                if ($params['page'] == 1) {
-                    // There is no pagination when searching through collections
-                    $result = $this->getImagesFromCollection($params['collection']);
-                    // Disable all other filters, as we cannot search within a collection
-                    $result->disabledFilters = array_values(
-                        array_filter(
-                            array_keys($this->getAvailableFilters()),
-                            function ($filter) {
-                                return $filter !== 'collection';
-                            }
-                        )
-                    );
-                    // Also disable the search input
-                    $result->disabledFilters[] = 'q';
-                }
+            } else if ($params['page'] === 1) {
+                // There is no pagination when searching through collections
+                $result = $this->getImagesFromCollection($params['collection']);
+                // Disable all other filters, as we cannot search within a collection
+                $result->disabledFilters = array_values(
+                    array_filter(
+                        array_keys($this->getAvailableFilters()),
+                        static function ($filter) {
+                            return $filter !== 'collection';
+                        }
+                    )
+                );
+                // Also disable the search input
+                $result->disabledFilters[] = 'q';
             }
-        } catch (ClientException $e) {
+        } catch (ClientException|GuzzleException|JsonException $e) {
             $this->logger->critical($e->getMessage());
             $result->success = false;
             $result->message = $e->getMessage();
@@ -212,7 +266,11 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
         return $result;
     }
 
-    public function getImagesFromCollection($collectionId)
+    /**
+     * @throws GuzzleException
+     * @throws JsonException
+     */
+    public function getImagesFromCollection($collectionId): ?SearchResult
     {
         $client = new Client();
         // First fetch the list of images contained in this collection
@@ -223,10 +281,10 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
             ]
         ]);
 
-        $rawResult = json_decode($response->getBody()->getContents());
+        $rawResult = json_decode($response->getBody()->getContents(), false, 512, JSON_THROW_ON_ERROR);
         if (!empty($rawResult->data)) {
             // If there were results, fetch the details of those images
-            $imageIds = array_map(function ($item) {
+            $imageIds = array_map(static function ($item) {
                 return $item->id;
             }, $rawResult->data);
 
@@ -238,7 +296,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
                     $this->extensionConfiguration['shutterstock_consumer_secret']
                 ]
             ]);
-            $rawResult = json_decode($response->getBody()->getContents());
+            $rawResult = json_decode($response->getBody()->getContents(), false, 512, JSON_THROW_ON_ERROR);
             if ($rawResult) {
                 return $this->formatResults($rawResult);
             }
@@ -249,10 +307,11 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
 
     /**
      * Converts the raw API results into a common format
-     * @param array $rawData
+     * @param stdClass $rawData
      * @param array $params
+     * @return SearchResult
      */
-    public function formatResults($rawData, $params = [])
+    public function formatResults(stdClass $rawData, array $params = []): SearchResult
     {
         /** @var SearchResult $result */
         $result = GeneralUtility::makeInstance(SearchResult::class);
@@ -276,10 +335,10 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
      */
     public function getAddButtonLabel(): ?string
     {
-        return LocalizationUtility::translate('button.add_media', 'id_shutterstock_connector');
+        return LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:button.add_media', 'shutterstock-connector');
     }
 
-    public function getCategoriesFilter()
+    public function getCategoriesFilter(): array
     {
         $client = new Client();
         try {
@@ -289,10 +348,10 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
                     $this->extensionConfiguration['shutterstock_consumer_secret']
                 ]
             ]);
-            $result = json_decode($response->getBody()->getContents());
+            $result = json_decode($response->getBody()->getContents(), false, 512, JSON_THROW_ON_ERROR);
             $options = [
                 [
-                    'label' => LocalizationUtility::translate('filter.category.I.any', 'id_shutterstock_connector'),
+                    'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.category.I.any', 'shutterstock-connector'),
                     'value' => ''
                 ]
             ];
@@ -302,7 +361,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
                     'value' => $category->id
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (Exception|GuzzleException) {
             $options = [];
         }
         return $options;
@@ -311,7 +370,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
     /**
      * Returns the list of available collections from the shutterstock account
      */
-    public function getAvailableCollections()
+    public function getAvailableCollections(): array
     {
         $options = [];
         try {
@@ -321,16 +380,16 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
                     'Authorization' => 'Bearer ' . $this->extensionConfiguration['shutterstock_token'],
                 ]
             ]);
-            $result = json_decode($response->getBody()->getContents());
+            $result = json_decode($response->getBody()->getContents(), false, 512, JSON_THROW_ON_ERROR);
             if (!empty($result->data)) {
                 $options[] = [
-                    'label' => LocalizationUtility::translate('filter.collection.I.any', 'id_shutterstock_connector'),
+                    'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.collection.I.any', 'shutterstock-connector'),
                     'value' => ''
                 ];
                 $options = array_merge(
                     $options,
                     array_map(
-                        function ($item) {
+                        static function ($item) {
                             return [
                                 'label' => $item->name . ' (' . $item->total_item_count . ')',
                                 'value' => $item->id
@@ -339,7 +398,7 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
                         $result->data)
                 );
             }
-        } catch (\Exception $e) {
+        } catch (Exception|GuzzleException $e) {
             $this->logger->critical(
                 sprintf(
                     'An error occured while fetching collections from Shutterstock. Error: %s',
@@ -359,257 +418,257 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
     {
         return [
             'collection' => [
-                'label' => LocalizationUtility::translate('filter.collection.label', 'id_shutterstock_connector'),
+                'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.collection.label', 'shutterstock-connector'),
                 'options' => $this->getAvailableCollections()
             ],
             'orientation' => [
-                'label' => LocalizationUtility::translate('filter.orientation.label', 'id_shutterstock_connector'),
+                'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.orientation.label', 'shutterstock-connector'),
                 'options' => [
                     [
-                        'label' => LocalizationUtility::translate('filter.orientation.I.any',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.orientation.I.any',
+                            'shutterstock-connector'),
                         'value' => ''
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.orientation.I.horizontal',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.orientation.I.horizontal',
+                            'shutterstock-connector'),
                         'value' => 'horizontal'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.orientation.I.vertical',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.orientation.I.vertical',
+                            'shutterstock-connector'),
                         'value' => 'vertical'
                     ],
                 ]
             ],
             'category' => [
-                'label' => LocalizationUtility::translate('filter.category.label', 'id_shutterstock_connector'),
+                'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.category.label', 'shutterstock-connector'),
                 'options' => $this->getCategoriesFilter()
             ],
             'color' => [
-                'label' => LocalizationUtility::translate('filter.color.label', 'id_shutterstock_connector'),
+                'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.label', 'shutterstock-connector'),
                 'options' => [
                     [
-                        'label' => LocalizationUtility::translate('filter.color.I.any', 'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.I.any', 'shutterstock-connector'),
                         'value' => ''
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.color.I.grayscale',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.I.grayscale',
+                            'shutterstock-connector'),
                         'value' => 'grayscale'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.color.I.blue', 'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.I.blue', 'shutterstock-connector'),
                         'value' => '0000FF'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.color.I.fuschia',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.I.fuschia',
+                            'shutterstock-connector'),
                         'value' => 'FF00FF'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.color.I.green', 'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.I.green', 'shutterstock-connector'),
                         'value' => '00FF00'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.color.I.orange', 'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.I.orange', 'shutterstock-connector'),
                         'value' => 'FFA500'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.color.I.purple', 'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.I.purple', 'shutterstock-connector'),
                         'value' => '800080'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.color.I.red', 'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.I.red', 'shutterstock-connector'),
                         'value' => 'FF0000'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.color.I.teal', 'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.I.teal', 'shutterstock-connector'),
                         'value' => '008080'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.color.I.yellow', 'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.color.I.yellow', 'shutterstock-connector'),
                         'value' => 'FFFF00'
                     ],
                 ]
             ],
             'image_type' => [
-                'label' => LocalizationUtility::translate('filter.image_type.label', 'id_shutterstock_connector'),
+                'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.image_type.label', 'shutterstock-connector'),
                 'options' => [
                     [
-                        'label' => LocalizationUtility::translate('filter.image_type.I.any',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.image_type.I.any',
+                            'shutterstock-connector'),
                         'value' => ''
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.image_type.I.photo',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.image_type.I.photo',
+                            'shutterstock-connector'),
                         'value' => 'photo'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.image_type.I.vector',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.image_type.I.vector',
+                            'shutterstock-connector'),
                         'value' => 'vector'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.image_type.I.illustration',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.image_type.I.illustration',
+                            'shutterstock-connector'),
                         'value' => 'illustration'
                     ],
                 ]
             ],
             'people_ethnicity' => [
-                'label' => LocalizationUtility::translate('filter.people_ethnicity.label', 'id_shutterstock_connector'),
+                'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.label', 'shutterstock-connector'),
                 'options' => [
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.any',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.any',
+                            'shutterstock-connector'),
                         'value' => ''
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.african',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.african',
+                            'shutterstock-connector'),
                         'value' => 'african'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.african_american',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.african_american',
+                            'shutterstock-connector'),
                         'value' => 'african_american'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.brazilian',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.brazilian',
+                            'shutterstock-connector'),
                         'value' => 'brazilian'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.caucasian',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.caucasian',
+                            'shutterstock-connector'),
                         'value' => 'caucasian'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.chinese',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.chinese',
+                            'shutterstock-connector'),
                         'value' => 'chinese'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.east_asian',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.east_asian',
+                            'shutterstock-connector'),
                         'value' => 'east_asian'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.hispanic',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.hispanic',
+                            'shutterstock-connector'),
                         'value' => 'hispanic'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.japanese',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.japanese',
+                            'shutterstock-connector'),
                         'value' => 'japanese'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.middle_eastern',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.middle_eastern',
+                            'shutterstock-connector'),
                         'value' => 'middle_eastern'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.native_american',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.native_american',
+                            'shutterstock-connector'),
                         'value' => 'native_american'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.pacific_islander',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.pacific_islander',
+                            'shutterstock-connector'),
                         'value' => 'pacific_islander'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.south_asian',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.south_asian',
+                            'shutterstock-connector'),
                         'value' => 'south_asian'
                     ],
 
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.southeast_asian',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.southeast_asian',
+                            'shutterstock-connector'),
                         'value' => 'southeast_asian'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_ethnicity.I.other',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_ethnicity.I.other',
+                            'shutterstock-connector'),
                         'value' => 'other'
                     ],
                 ]
             ],
             'people_gender' => [
-                'label' => LocalizationUtility::translate('filter.people_gender.label', 'id_shutterstock_connector'),
+                'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_gender.label', 'shutterstock-connector'),
                 'options' => [
                     [
-                        'label' => LocalizationUtility::translate('filter.people_gender.I.any',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_gender.I.any',
+                            'shutterstock-connector'),
                         'value' => ''
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_gender.I.male',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_gender.I.male',
+                            'shutterstock-connector'),
                         'value' => 'male'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_gender.I.female',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_gender.I.female',
+                            'shutterstock-connector'),
                         'value' => 'female'
                     ],
                 ]
             ],
             'people_age' => [
-                'label' => LocalizationUtility::translate('filter.people_age.label', 'id_shutterstock_connector'),
+                'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.label', 'shutterstock-connector'),
                 'options' => [
                     [
-                        'label' => LocalizationUtility::translate('filter.people_age.I.any',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.I.any',
+                            'shutterstock-connector'),
                         'value' => ''
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_age.I.infants',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.I.infants',
+                            'shutterstock-connector'),
                         'value' => 'infants'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_age.I.children',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.I.children',
+                            'shutterstock-connector'),
                         'value' => 'children'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_age.I.teenagers',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.I.teenagers',
+                            'shutterstock-connector'),
                         'value' => 'teenagers'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_age.I.20s',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.I.20s',
+                            'shutterstock-connector'),
                         'value' => '20s'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_age.I.30s',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.I.30s',
+                            'shutterstock-connector'),
                         'value' => '30s'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_age.I.40s',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.I.40s',
+                            'shutterstock-connector'),
                         'value' => '40s'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_age.I.50s',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.I.50s',
+                            'shutterstock-connector'),
                         'value' => '50s'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_age.I.60s',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.I.60s',
+                            'shutterstock-connector'),
                         'value' => '60s'
                     ],
                     [
-                        'label' => LocalizationUtility::translate('filter.people_age.I.older',
-                            'id_shutterstock_connector'),
+                        'label' => LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:filter.people_age.I.older',
+                            'shutterstock-connector'),
                         'value' => 'older'
                     ],
                 ]
@@ -636,10 +695,10 @@ class ShutterstockConnector implements ConnectorInterface, LoggerAwareInterface
      */
     public function getAddButtonAttributes(): array
     {
-        $buttonLabel = LocalizationUtility::translate('button.add_media', 'id_shutterstock_connector');
-        $submitButtonLabel = LocalizationUtility::translate('button.submit', 'id_shutterstock_connector');
-        $cancelLabel = LocalizationUtility::translate('button.cancel', 'id_shutterstock_connector');
-        $placeholderLabel = LocalizationUtility::translate('placeholder.search', 'id_shutterstock_connector');
+        $buttonLabel = LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:button.add_media', 'shutterstock-connector');
+        $submitButtonLabel = LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:button.submit', 'shutterstock-connector');
+        $cancelLabel = LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:button.cancel', 'shutterstock-connector');
+        $placeholderLabel = LocalizationUtility::translate('LLL:EXT:shutterstock-connector/Resources/Private/Language/locallang.xlf:placeholder.search', 'shutterstock-connector');
         return [
             'title' => $buttonLabel,
             'data-btn-submit' => $submitButtonLabel,
